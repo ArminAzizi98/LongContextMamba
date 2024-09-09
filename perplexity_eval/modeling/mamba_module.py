@@ -71,7 +71,7 @@ class Mamba(nn.Module):
 
         self.activation = "silu"
         self.act = nn.SiLU()
-        self.armin_ratio = nn.Parameter(torch.tensor([0.5]).bfloat16().cuda(), requires_grad = False)
+        self.mamba_scale = nn.Parameter(torch.tensor([0.5]).bfloat16().cuda(), requires_grad = False)
         self.x_proj = nn.Linear(
             self.d_inner, self.dt_rank + self.d_state * 2, bias=False, **factory_kwargs
         )
@@ -203,10 +203,10 @@ class Mamba(nn.Module):
                 dt = F.softplus(self.dt_proj(dt))
                 N = dt.shape[0]
                 n = int(N/8)
-                scaling_factors = torch.repeat_interleave(self.armin_ratio, n)
+                scaling_factors = torch.repeat_interleave(self.mamba_scale, n)
 
                 if len(scaling_factors) < N:
-                          scaling_factors = torch.cat([scaling_factors, scaling_factors.new_full((N - len(scaling_factors),), self.armin_ratio[-1])])
+                          scaling_factors = torch.cat([scaling_factors, scaling_factors.new_full((N - len(scaling_factors),), self.mamba_scale[-1])])
 
                 dt *= scaling_factors.view(-1, 1)
                 dt = dt.to(dtype=B.dtype)
