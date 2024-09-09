@@ -71,7 +71,7 @@ class Mamba(nn.Module):
 
         self.activation = "silu"
         self.act = nn.SiLU()
-        self.armin_ratio = nn.Parameter(torch.tensor([1.0]).bfloat16().cuda(), requires_grad = False)
+        self.mamba_scale = nn.Parameter(torch.tensor([1.0]).bfloat16().cuda(), requires_grad = False)
         self.x_proj = nn.Linear(
             self.d_inner, self.dt_rank + self.d_state * 2, bias=False, **factory_kwargs
         )
@@ -205,19 +205,19 @@ class Mamba(nn.Module):
                 N = dt.shape[0]
                 n = int(N/8)
 
-                #scaling_factors = torch.repeat_interleave(torch.tensor(self.armin_ratio), n)
+                #scaling_factors = torch.repeat_interleave(torch.tensor(self.mamba_scale), n)
 
 # If d is not an exact multiple of len(alphas) * n, repeat the last alpha for the remaining columns
                 #if len(scaling_factors) < N:
-                #    scaling_factors = torch.cat([scaling_factors, scaling_factors.new_full((d - len(scaling_factors),), self.armin_ratio[-1])])
+                #    scaling_factors = torch.cat([scaling_factors, scaling_factors.new_full((d - len(scaling_factors),), self.mamba_scale[-1])])
 
 # Reshape the scaling_factors to allow broadcasting and multiply
                 #dt *= scaling_factors.view(1, -1)
 #
-                scaling_factors = torch.repeat_interleave(self.armin_ratio, n)
+                scaling_factors = torch.repeat_interleave(self.mamba_scale, n)
                 
                 if len(scaling_factors) < N:
-                          scaling_factors = torch.cat([scaling_factors, scaling_factors.new_full((N - len(scaling_factors),), self.armin_ratio[-1])])
+                          scaling_factors = torch.cat([scaling_factors, scaling_factors.new_full((N - len(scaling_factors),), self.mamba_scale[-1])])
 #                
                 dt *= scaling_factors.view(-1, 1)
                 dt = dt.to(dtype=B.dtype)
