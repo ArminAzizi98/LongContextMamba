@@ -3,7 +3,6 @@ python -u eval.py \
     --dataset-min-tokens 32768 \
     --samples 20 \
     --split test \
-    --output-file figure \
     --min-tokens 32768 \
     --max-tokens 32768 \
     --tokens-step 32768 \
