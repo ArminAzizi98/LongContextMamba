@@ -19,7 +19,8 @@ def set_model(loaded, vec):
     counter = 0
     for pname, p in loaded.named_modules():  
         if (isinstance(p, Mamba)):
-            p.mamba_scale = torch.nn.Parameter(torch.tensor([vec[counter]]).cuda(), requires_grad = False)
+#            print('setting the model')
+            p.armin_ratio = torch.nn.Parameter(torch.tensor([vec[counter]]).cuda(), requires_grad = False)
             counter = counter + 1
     return loaded
 
@@ -121,14 +122,13 @@ def main(args):
 
 
     if args.tokenized:
-        try:
-            input_texts = datasets.load_from_disk(args.tokenized)
-        except:
+            #input_texts = datasets.load_from_disk(args.tokenized)
+            input_texts_calib = datasets.load_from_disk("./my_dataset")
             input_texts = datasets.load_dataset(
                 args.tokenized, name=args.subset, split=args.split)
+
     else:
-        input_texts = datasets.load_dataset(
-            args.dataset, name=args.subset, split=args.split)
+        input_texts = datasets.load_dataset("mmosbach/pile-validation")
 
         def tokenize(example):
             tokenized = tokenizer(
@@ -144,7 +144,8 @@ def main(args):
             example["tokenized_len"] = len(tokenized["input_ids"])
             return example
 
-        input_texts = input_texts.map(tokenize, num_proc=64)
+        input_texts = input_texts.map(tokenize, num_proc=4)
+        input_texts_calib = input_texts_calib.map(tokenize, num_proc=4)
         if args.save_tokenized:
             from datasets import DatasetDict
             dataset = DatasetDict({"test": input_texts})
@@ -153,11 +154,14 @@ def main(args):
             return
 
     if args.dataset_min_tokens:
+
         input_texts = input_texts.filter(
-            lambda x: x["tokenized_len"] >= args.dataset_min_tokens, num_proc=64)
+            lambda x: x["tokenized_len"] >= args.dataset_min_tokens, num_proc=4)
+        input_texts_calib = input_texts_calib.filter(
+            lambda x: x["tokenized_len"] >= args.dataset_min_tokens, num_proc=4)
     if args.samples:
         input_texts = input_texts[:args.samples]
-
+    input_texts_calib = input_texts_calib[:args.calib_samples]
     if args.tokens_step:
         tokens = [x for x in range(
             args.min_tokens, args.max_tokens + 1, args.tokens_step)]
@@ -188,7 +192,7 @@ def main(args):
 #      0.89041023, 0.8941483, 0.58430139, 0.05820116, 0.3614314, 0.50283315,
 #      0.98084944, 0.22268181, 0.87325258, 0.28364548, 0.31033875, 0.79487263
 #      ])
-      t = numpy.ones(48)
+      t = numpy.random.rand(48)/4 + 0.75
       #t = numpy.array([
       #0.89984392, 0.977997,   0.8815897,  0.97730368, 1.00134224, 0.78043555,
       #1.04885112, 0.76973544, 0.91439183, 0.79723754, 0.91133445, 0.77088535,
@@ -211,17 +215,15 @@ def main(args):
       for x in range(50):
         print(model)
         torch.cuda.empty_cache()
-        c = 0.1
-        #/((1+x)**0.1)
-        alpha = 0.001 
-        #* math.cos(x * math.pi/(99 * 2))
+        c = 0.1/((1+x)**0.1)
+        alpha = 0.001 * math.cos(x * math.pi/(99 * 2))
         delta = numpy.random.choice([-1,1], size=(48))
         t_p = set_min(t + c *delta)
         t_m = set_min(t - c *delta)
         result = []
         for max_length in tokens:
-            loaded = set_model(loaded, t)
-            ppl1 = compute_perplexity(model=loaded, tokenizer=tokenizer, encodings=input_texts,
+            loaded = set_model(loaded, t_p)
+            ppl1 = compute_perplexity(model=loaded, tokenizer=tokenizer, encodings=input_texts_calib,
                                      add_start_token=tokenizer.bos_token is not None, max_length=max_length,
                                      sliding_window=args.sliding_window, truncate=args.truncate,
                                      aggressive_memory=args.aggressive_memory, hide_progress=args.hide_progress, delta_ratio=args.delta_ratio)['mean_perplexity']
@@ -230,7 +232,7 @@ def main(args):
             print("__________________________________________")
 
             loaded = set_model(loaded, t_m)
-            ppl2 = compute_perplexity(model=loaded, tokenizer=tokenizer, encodings=input_texts,
+            ppl2 = compute_perplexity(model=loaded, tokenizer=tokenizer, encodings=input_texts_calib,
                                      add_start_token=tokenizer.bos_token is not None, max_length=max_length,
                                      sliding_window=args.sliding_window, truncate=args.truncate,
                                      aggressive_memory=args.aggressive_memory, hide_progress=args.hide_progress, delta_ratio=args.delta_ratio)['mean_perplexity']
@@ -281,6 +283,7 @@ if __name__ == "__main__":
     parser.add_argument("--truncate", action="store_true")
     parser.add_argument("--split", type=str, default="test")
     parser.add_argument("--samples", type=int)
+    parser.add_argument("--calib-samples", type=int)
     parser.add_argument("--save-tokenized", type=str)
     parser.add_argument("--tokenized", type=str)
     parser.add_argument("--output-file", type=str)
