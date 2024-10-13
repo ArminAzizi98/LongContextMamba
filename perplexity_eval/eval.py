@@ -123,7 +123,7 @@ def main(args):
 
     if args.tokenized:
             #input_texts = datasets.load_from_disk(args.tokenized)
-            input_texts_calib = datasets.load_from_disk("./my_dataset")
+            input_texts_calib = datasets.load_from_disk("./calibration_samples")
             input_texts = datasets.load_dataset(
                 args.tokenized, name=args.subset, split=args.split)
 
