@@ -20,7 +20,7 @@ def set_model(loaded, vec):
     for pname, p in loaded.named_modules():  
         if (isinstance(p, Mamba)):
 #            print('setting the model')
-            p.armin_ratio = torch.nn.Parameter(torch.tensor([vec[counter]]).cuda(), requires_grad = False)
+            p.mamba_scale = torch.nn.Parameter(torch.tensor([vec[counter]]).cuda(), requires_grad = False)
             counter = counter + 1
     return loaded
 
