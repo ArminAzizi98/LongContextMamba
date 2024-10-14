@@ -1,2 +1,2 @@
 # Run MambaExtend on Pile
-<pre> <code>./train.sh</code> </pre 
+<pre> <code>./eval.sh</code> </pre 
