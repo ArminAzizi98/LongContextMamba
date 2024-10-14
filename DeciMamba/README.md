@@ -28,25 +28,7 @@ In synthetic tasks, as well as in real-world long-range NLP tasks, DeciMamba is 
 
 <br>
 
-# Setup
-## Clone Project
-```
-git clone https://github.com/assafbk/DeciMamba.git
-cd DeciMamba
-```
 
-## Create Environment
-To set up our environment, please run:
-```
-conda env create -f environment.yml
-conda activate decimamba
-```
-
-Install Mamba:
-```
-pip install causal-conv1d==1.1.1
-pip install mamba-ssm==1.1.1
-```
 
 ## Additional Requirements - Passkey Retrieval
 
