@@ -41,7 +41,7 @@ def set_model(loaded, vec):
     counter = 0
     for pname, p in loaded.named_modules():
         if (isinstance(p, Mamba)):
-            p.armin_ratio = nn.Parameter(vec[counter], requires_grad = True)
+            p.mamba_scale = nn.Parameter(vec[counter], requires_grad = True)
             counter = counter + 1
     return loaded
 
@@ -59,7 +59,7 @@ def init_t(model, t):
 def set_ratio(model):
 
     for pname, p in model.named_parameters():
-        if ('armin_ratio' in pname):
+        if ('mamba_scale' in pname):
            p = p.clamp(min=0.01)
 
     return model
@@ -849,7 +849,7 @@ def run_train_loop(config, start_datetime_str):
     counter = 0
 # 
     for pname, p in model.named_parameters():
-       if not ('armin_ratio' in pname):
+       if not ('mamba_scale' in pname):
            p.requires_grad = False
     import numpy
     #t = torch.tensor(numpy.array([0.4917, 1.3064, 0.6692, 0.5107, 0.9111, 0.8782, 0.8039, 0.3174, 1.7046,
