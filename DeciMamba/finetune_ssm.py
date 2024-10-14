@@ -4,6 +4,7 @@ from transformers import AutoTokenizer
 import torch
 from torch.utils.data import DataLoader
 from torch.nn import CrossEntropyLoss
+import torch.nn as nn
 import os
 import shutil
 from datetime import datetime
@@ -19,43 +20,59 @@ import argparse
 from tabulate import tabulate
 from modeling.mamba_lm import MambaLMHeadModel
 from modeling.mamba_module import Mamba
+#from mamba_ssm.models.mixer_seq_simple import MambaLMHeadModel
+#from mamba_ssm.modules.mamba2 import Mamba2
+#from mamba_ssm.modules.mamba_simple import Mamba
 from submodules.babilong.babilong_utils import TaskDatasetCustom, SentenceSampler, NoiseInjectionDataset
 import modeling
 from utils import *
 from custom_datasets.pg19 import *
 
-
 def set_min(array, val1 = 0.01, val2=1.0):
-         for j in  range(array.shape[0]):
-            for i in range(array.shape[1]):
-                if array[j,i] < val1:
-                   array[j, i] = val1
-             #elif x>val2:
-             #    array[j,i] = val2
-         return array
+    #for j in  range(array.shape[0]):
+      for i,x in enumerate(array):
+        if x<val1:
+            array[i] = val1
+        #elif x>val2:
+        #    array[j,i] = val2
+      return array
 
 def set_model(loaded, vec):
     counter = 0
-    for pname, p in loaded.named_modules():  
+    for pname, p in loaded.named_modules():
         if (isinstance(p, Mamba)):
-            p.mamba_scale = torch.nn.Parameter(vec[counter], requires_grad = False)
+            p.armin_ratio = nn.Parameter(vec[counter], requires_grad = True)
             counter = counter + 1
     return loaded
 
+def init_t(model, t):
+    counter = 0
+    for pname, p in model.named_parameters():
+        if ('dt_ptoj.weight' in pname):
+            t[counter] = p
+            counter = counter + 1
 
-def compute_perturb(x, t):
-        import numpy
-        torch.cuda.empty_cache()
-        c = 0.1/((1+x)**0.1)
-        beta = 0.9
-        import math
-        alpha = 0.0025 * math.cos(x * math.pi/(2 * 99))
-        delta = torch.tensor(numpy.random.normal(size=(24,8))).cuda()
-        t_p = set_min(t + c *delta)
-        t_m = set_min(t - c *delta)
-        return t_p, t_m, delta, c, alpha
+    return t
 
 
+
+def set_ratio(model):
+
+    for pname, p in model.named_parameters():
+        if ('armin_ratio' in pname):
+           p = p.clamp(min=0.01)
+
+    return model
+def perturb_model(model, epoch, t, flag = True):
+
+    t_p, t_n, delta, c, alpha = compute_perturb(epoch, t)
+    
+    if flag:
+         model = set_model(model, t_p)
+    else:
+         model = set_model(model, t_n)
+    
+    return model, delta, c
 
 def clean_up(start_datetime_str):
     print('\nrunning clean up\n')
@@ -99,6 +116,9 @@ def get_lr_scheduler(config, optimizer, train_set_len, batch_size):
     if config['lr_sched_type'] == "const":
         lambda1 = lambda epoch: 1
         lr_sched = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda1)
+
+    elif config["lr_sched_type"] =="cosine":
+        lr_sched = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max = 4 * int(train_set_len), eta_min = 1e-5)
     else:
         raise(f'lr_sched_type {config["lr_sched_type"]} not supported')
     
@@ -112,16 +132,21 @@ def save_model(config, model, model_processor, epoch, step, start_datetime_str, 
         ckpt = os.path.join(output_dir, f'epoch_{epoch}_step_{step}')
     model.save_pretrained(ckpt)
     model_processor.save_pretrained(ckpt)
-    with open(os.path.join(config['output_dir'],ckpt,'fintune_ssm_config.json'), 'w') as f:
-        json.dump(config, f)
+    #with open(os.path.join(config['output_dir'],ckpt,'fintune_ssm_config.json'), 'w') as f:
+    #    json.dump(config, f)
 
 def get_data_loaders(config, model_processor=None, final_eval_mode=False):
     if config['dataset'] == 'niah_custom':
-        return get_data_loaders_babilong(config, model_processor, final_eval_mode)
+    #   print('loader is: ')
+#    print(get_data_loaders_ppl_test)
+ #      raise
+
+ 
+       return get_data_loaders_babilong(config, model_processor, final_eval_mode)
 
     if config['dataset'] == 'ppl_test':
         return get_data_loaders_ppl_test(config, final_eval_mode)
-
+ 
     if config['dataset'].startswith('squad'):
         return get_data_loaders_squad(config, final_eval_mode)
 
@@ -238,13 +263,14 @@ def load_model(config):
     if config['load_cp'] is not None:
         print(f'loading model from checkpoint: {config["load_cp"]}')
         #model = mamba_model_class.from_pretrained(config['load_cp'], device=config['model_device'], dtype=wanted_dtype, cache_dir=config['cache_dir'], decimation_config=decimation_config)
-        model = modeling.mamba_lm.MambaLMHeadModel.from_pretrained("state-spaces/mamba-130m", dtype=torch.bfloat16).to("cuda")
+        model = MambaLMHeadModel.from_pretrained("state-spaces/mamba-130m", dtype=torch.bfloat16).to("cuda")
 
     else:
         #model = mamba_model_class.from_pretrained(f'state-spaces/{config["model_type"]}', device=config['model_device'], dtype=wanted_dtype, cache_dir=config['cache_dir'], decimation_config=decimation_config)
-        model = modeling.mamba_lm.MambaLMHeadModel.from_pretrained("state-spaces/mamba-130m", dtype=torch.bfloat16).to("cuda")
-    for pname, p in model.named_parameters():
-        print(pname)
+        model = MambaLMHeadModel.from_pretrained("state-spaces/mamba-130m", dtype=torch.bfloat16).to("cuda")
+#    for pname, p in model.named_parameters():
+#        print(pname)
+#        print(p.shape)
     return model_processor, model
 
 def run_squad_retrieve_evaluator(pred_dicts, config, start_datetime_str):
@@ -380,20 +406,82 @@ def evaluate_validation_set_ppl_test(model, model_processor, data_loader_val, co
     max_amount_of_windows = 1
     dataset_val = get_pg19(val_only=True) 
     context_lengths = config['ppl_test_context_lens_eval']
-    context_lengths = [16384]
+    context_lengths = [16384] # was 32k
+    print(model)
     ppl_per_context_length = []
     for i_ctx_len, window_size in enumerate(context_lengths):
         trg_len = config['ppl_test_pred_len']
         print(f'testing perplexity with context length of {window_size}, windows per sample = {max_amount_of_windows}, {trg_len} labels per window')
-
         import numpy
-        t = torch.tensor((numpy.ones((24, 8)))/2).cuda()
+        #numpy.random.seed(131)
+        #t = torch.tensor(numpy.random.rand(24)/4 +0.5).cuda()
+        #t = torch.tensor(numpy.array([0.3910, 1.1235, 0.7702, 0.7487, 0.8239, 0.4669, 1.0528, 0.2129, 1.4240,
+        #1.2366, 2.7098, 0.9664, 0.2739, 1.2931, 0.0858, 0.0685, 1.7970, 0.5419,
+        #0.8162, 1.8568, 0.5627, 1.0528, 0.9466, 0.9481])).cuda()
+        t = torch.tensor(numpy.array([0.4917, 1.3064, 0.6692, 0.5107, 0.9111, 0.8782, 0.8039, 0.3174, 1.7046,
+        1.2679, 2.8062, 0.9354, 0.2809, 0.9637, 0.1081, 0.0773, 2.0758, 0.4019,
+        1.1145, 2.0735, 0.5589, 0.7694, 0.8399, 0.8908])).cuda() # 70k
+#
+#        t = torch.tensor(numpy.array([1.0663, 0.9476, 0.7780, 0.4936, 0.9110, 0.5419, 1.3521, 1.2470, 1.5686,
+#        1.3175, 2.3640, 0.5392, 0.8938, 0.9619, 0.2627, 0.2432, 1.6837, 0.7308,
+#        0.8478, 2.1218, 1.0165, 1.0778, 0.9045, 0.8876])).cuda() #16k
+#        t = torch.tensor(numpy.array([1.0876, 0.0100, 1.4424, 0.5819, 0.5164, 0.9949, 1.5944, 1.2805, 0.0100,
+#        0.6068, 0.6220, 2.4220, 1.0129, 0.5950, 0.8460, 1.0276, 3.3149, 0.0100,
+#        0.6175, 0.3026, 1.8375, 0.6395, 1.1952, 0.5532, 1.1359, 0.8961, 0.6137,
+#        0.4796, 0.2671, 1.9405, 1.2185, 1.6656, 1.6262, 0.7847, 1.0591, 1.5775,
+#        2.3413, 1.2451, 1.8946, 1.1604, 1.5619, 0.2887, 0.9362, 1.6389, 0.5892,
+#        1.0923, 0.4078, 0.7414])).cuda()
+
+ #       t = torch.tensor(numpy.array([0.8512, 0.1347, 1.4474, 0.5946, 0.7311, 1.0608, 1.6473, 1.0283, 0.2820,
+#        0.7292, 0.9309, 2.4135, 1.1326, 0.9309, 0.7264, 1.2802, 3.1774, 0.0100,
+#        0.5854, 0.8827, 1.4503, 0.5466, 1.1135, 0.7023, 1.2994, 0.8734, 0.9504,
+#        0.5780, 0.8186, 1.5321, 1.3377, 1.2080, 1.5273, 0.7753, 1.4856, 1.5628,
+#        2.2643, 1.0650, 2.3553, 1.2437, 1.5054, 0.3817, 0.9106, 1.4515, 0.1601,
+#        1.1583, 0.8346, 0.8771])).cuda() # 32k
+#        t = torch.tensor(numpy.array([1.0072, 0.0479, 1.2867, 0.4920, 0.5164, 1.0946, 1.5938, 0.9883, 0.1153,
+#        0.6255, 0.5725, 2.4349, 0.9119, 0.4972, 1.1398, 0.8927, 3.7928, 0.0100,
+#        0.9468, 0.1234, 2.7239, 0.7447, 1.3176, 0.5400, 1.2734, 0.6262, 0.7430,
+#         0.4456, 0.3565, 2.0454, 2.1025, 1.6340, 1.6995, 0.7152, 0.5586, 1.6766,
+#        1.7970, 1.5919, 1.7401, 1.2820, 1.7040, 0.0382, 0.9522, 1.7284, 0.8813,
+#        1.2593, 0.8832, 0.7962])).cuda()
+        #t = torch.tensor(numpy.array([0.86710526, 1.02399479, 0.3850236, 0.4709485, 0.77005444, 0.86815213,
+        #   0.70918477, 0.35384858, 0.87332094, 0.97560667, 1.1225537, 0.33617862,
+        #   0.11423034, 1.20741713, 0.11719093, 0.05, 0.92904884, 1.00153821,
+        #   0.45555231, 0.71395793, 1.1545018, 0.80338521, 0.88218632, 0.86739424,
+        #   0.38076303, 0.18158199, 0.95591043, 1.42144726, 0.71597794, 1.4460276,
+        #   1.6315494, 0.11388792, 0.44663662, 0.78397702, 0.97674961, 0.35538752,
+        #   0.52246599, 0.26660846, 0.66884087, 0.20765073, 0.31141403, 0.98173097,
+        #   1.40968601, 0.26755167, 0.17838913, 0.56325534, 0.19316724, 0.97516609])).cuda() # from pile 64k
+        t = torch.tensor(numpy.array([
+        1.33250901, 1.480226, 0.40657105, 0.83734035, 1.09836288, 1.14668283,
+        0.90877685, 1.22968062, 0.78455463, 0.86188797, 0.98063588, 0.86506752,
+        0.57854638, 1.1840701, 0.350252, 0.40106343, 0.610004, 0.50758637,
+        1.19205964, 0.8915702, 0.76970741, 1.11177598, 1.07927745, 0.97718009,
+        0.5711986, 1.18698538, 0.71460618, 0.43897153, 0.74082404, 1.21553687,
+        1.25088512, 0.79471132, 0.56758616, 0.77004049, 0.14285558, 0.65271854,
+        0.79092646, 0.68986761, 1.04150034, 0.87985216, 1.05129979, 0.88572118,
+        0.47022264, 1.26400425, 1.03186533, 1.01701202, 1.25979295, 1.14111666 
+        ])).cuda()
         for x in range(100):
-          t_p, t_n, delta,c, alpha = compute_perturb(x, t)
-          #print(t_p)
-          model = set_model(model, t_p)
+          c = 0.2/((1+x)**0.1)
+          #/((1+x)**0.1)/((1+x)**0.1)
+          beta = 0.9
+          import math
+          alpha = 0.01 
+          delta = torch.tensor(numpy.random.normal(size=(48))).cuda()
+          t_p = (t + c *delta).clamp(min=0.01)
+          t_m = (t - c *delta).clamp(min=0.01)
+
+          model = set_model(model, t)
           nlls = []
+          counter = 0
+
           for i, sample in enumerate(tqdm(dataset_val)):
+            counter = counter  + 1
+            #if counter ==5:
+            #    break
+
+
             seq_len = sample['input_ids'].size(1)
             #if seq_len < window_size:
             #    print(f'skipping sample {i}, seq_len = {seq_len//1000}K < window_size = {window_size//1000}K')
@@ -421,11 +509,17 @@ def evaluate_validation_set_ppl_test(model, model_processor, data_loader_val, co
           ppl_p = torch.exp(torch.stack(nlls).mean()).cpu().to(torch.float)
           print(f'calculated up perplexity: {ppl_p:.2f}')
           ppl_per_context_length.append(ppl_p)
-
-
-          model = set_model(model, t_n)
+          raise
+        
+          model = set_model(model, t_m)
           nlls = []
+          counter = 0
           for i, sample in enumerate(tqdm(dataset_val)):    
+            counter = counter + 1
+            if counter == 5:
+                break
+
+
             seq_len = sample['input_ids'].size(1)
             #if seq_len < window_size:
             #    print(f'skipping sample {i}, seq_len = {seq_len//1000}K < window_size = {window_size//1000}K')
@@ -450,15 +544,21 @@ def evaluate_validation_set_ppl_test(model, model_processor, data_loader_val, co
                 if end_loc == seq_len:
                     break
 
-          ppl_n = torch.exp(torch.stack(nlls).mean()).cpu().to(torch.float)
-          print(f'calculated down perplexity: {ppl_n:.2f}')
-          ppl_per_context_length.append(ppl_n)
+          ppl_m = torch.exp(torch.stack(nlls).mean()).cpu().to(torch.float)
+          print(f'calculated down perplexity: {ppl_m:.2f}')
+          ppl_per_context_length.append(ppl_m)
 
-          g = (ppl_p - ppl_n) * delta/(2*c)
-          t = set_min(t - alpha * g)
+          g = (ppl_p - ppl_m)/(2*c*delta)
+          t = (t - alpha * g).clamp(min=0.01)
           nlls = []
           model = set_model(model, t)
+          counter = 0
           for i, sample in enumerate(tqdm(dataset_val)):    
+            counter = counter + 1
+#            if counter == 2:
+#                break
+
+
             seq_len = sample['input_ids'].size(1)
             #if seq_len < window_size:
             #    print(f'skipping sample {i}, seq_len = {seq_len//1000}K < window_size = {window_size//1000}K')
@@ -484,18 +584,23 @@ def evaluate_validation_set_ppl_test(model, model_processor, data_loader_val, co
                     break
 
 
+
+
           ppl = torch.exp(torch.stack(nlls).mean()).cpu().to(torch.float)
 
           print(f'calculated perplexity: {ppl:.2f}')
-          if ppl > ppl_p:
-               ppl = ppl_p
-               t = t_p
-          if ppl > ppl_n:
-               ppl = ppl_n
-               t = t_n
-          ppl_per_context_length.append(ppl)
-          print("_____________________________________________________________-")
 
+#          if ppl > ppl_p:
+#               ppl = ppl_p
+#               t = t_p
+#          if ppl > ppl_m:
+#               ppl = ppl_m
+#               t = t_m
+#          ppl_per_context_length.append(ppl)
+#          print("_____________________________________________________________-")
+#
+#          if ppl < 22:
+#                 print(t)
     val_log = {}
     val_log['score'] = np.mean(ppl_per_context_length)
     ppl_per_context_length_str = '\t'.join(f'{x:.2f}' for x in ppl_per_context_length)
@@ -694,8 +799,8 @@ def run_train_loop(config, start_datetime_str):
     config = validate_config(config)
     model_processor, model = load_model(config)
     data_loader_train, data_loader_val = get_data_loaders(config, model_processor=model_processor)
-    #optimizer = torch.optim.AdamW(model.parameters(), lr=config['lr'], weight_decay=config['weight_decay'])
-    #lr_sched = get_lr_scheduler(config, optimizer, len(data_loader_train), data_loader_train.batch_size)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=config['lr'], weight_decay=config['weight_decay'])
+    lr_sched = get_lr_scheduler(config, optimizer, len(data_loader_train), data_loader_train.batch_size)
     ce_loss = CrossEntropyLoss()
     df_val = pd.DataFrame()
     if config["dataset"].startswith('niah'):
@@ -713,49 +818,75 @@ def run_train_loop(config, start_datetime_str):
     if config['mamba_arch'] == 'deci' and config['find_deci_layer'] == True:
         deci_layer = find_deci_layer(model, model_processor, data_loader_val, config)
         update_deci_layer(model, deci_layer)
-
+#
     # initial performance
-    model.eval()
-    cur_df_val, val_log_step_0 = evaluate_validation_set(model, model_processor, data_loader_val, config, 0, 0, start_datetime_str, num_samples_to_log=config['eval_samples_to_log'])
-    df_val = df_val._append(cur_df_val,ignore_index=True)
-    print(f'\nValidation Set - Initial Result | Score: {val_log_step_0["score"]:.3f}\n')
-    if config['activate_logging']:
-        wandb_table_val = wandb.Table(data=df_val)
-        val_log_step_0['validation_data'] = wandb_table_val
-        if config["dataset"].startswith('niah'):
-            df_niah = df_niah._append(val_log_step_0['niah_map'],ignore_index=True)
-            val_log_step_0.pop('niah_map')
-            niah_table_val = wandb.Table(data=df_niah)
-            val_log_step_0['niah_val'] = niah_table_val
-        if config["dataset"].startswith('ppl_test'):
-            df_ppl_test = df_ppl_test._append(val_log_step_0['ppl_per_ctx_len'],ignore_index=True)
-            val_log_step_0.pop('ppl_per_ctx_len')
-            ppl_test_table_val = wandb.Table(data=df_ppl_test)
-            val_log_step_0['ppl_val'] = ppl_test_table_val
-        wandb.log(val_log_step_0, step=0)
-
-    if config['eval_mode']:
-        return
+#    model.eval()
+#    cur_df_val, val_log_step_0 = evaluate_validation_set(model, model_processor, data_loader_val, config, 0, 0, start_datetime_str, num_samples_to_log=config['eval_samples_to_log'])
+#    df_val = df_val._append(cur_df_val,ignore_index=True)
+#    print(f'\nValidation Set - Initial Result | Score: {val_log_step_0["score"]:.3f}\n')
+#    if config['activate_logging']:
+#        wandb_table_val = wandb.Table(data=df_val)
+#        val_log_step_0['validation_data'] = wandb_table_val
+#        if config["dataset"].startswith('niah'):
+#            df_niah = df_niah._append(val_log_step_0['niah_map'],ignore_index=True)
+#            val_log_step_0.pop('niah_map')
+#            niah_table_val = wandb.Table(data=df_niah)
+#            val_log_step_0['niah_val'] = niah_table_val
+#        if config["dataset"].startswith('ppl_test'):
+#            df_ppl_test = df_ppl_test._append(val_log_step_0['ppl_per_ctx_len'],ignore_index=True)
+#            val_log_step_0.pop('ppl_per_ctx_len')
+#            ppl_test_table_val = wandb.Table(data=df_ppl_test)
+#            val_log_step_0['ppl_val'] = ppl_test_table_val
+#        wandb.log(val_log_step_0, step=0)
+##
+#    if config['eval_mode']:
+#        return
 
     # train
     model.train()
     best_score = init_best_score(config)
     squad_noise_data_loader = None
+    counter = 0
+# 
+    for pname, p in model.named_parameters():
+       if not ('armin_ratio' in pname):
+           p.requires_grad = False
+    import numpy
+    #t = torch.tensor(numpy.array([0.4917, 1.3064, 0.6692, 0.5107, 0.9111, 0.8782, 0.8039, 0.3174, 1.7046,
+    #    1.2679, 2.8062, 0.9354, 0.2809, 0.9637, 0.1081, 0.0773, 2.0758, 0.4019,
+    #    1.1145, 2.0735, 0.5589, 0.7694, 0.8399, 0.8908])).cuda()
+    #t = torch.tensor(numpy.random.rand(24, 1536)).cuda()
+    #t = torch.load('armin_saved/t.pt').cuda()
+    #model = set_model(model, t)
+    iter = 0
+    optimizer = torch.optim.AdamW(model.parameters(), lr=config['lr'], weight_decay=config['weight_decay'])
+    lr_sched = get_lr_scheduler(config, optimizer, len(data_loader_train), data_loader_train.batch_size)
     for epoch in range(config["epochs"]):
         if config['dataset'].startswith('squad'):
             squad_noise_data_loader = get_noise_data_loader_squad(config)
 
         for idx, batch in enumerate(data_loader_train):
+            counter = counter + 1
+            iter = iter + 1
+            if iter==200:
+               raise
+
             if epoch == 0 and config['recover_step'] is not None and squad_recovery_run_loaders_to_cp(config, idx, data_loader_train, squad_noise_data_loader):
                 continue
 
             step = idx + epoch*len(data_loader_train)
             if (step) > config["max_step"]:
                 break
-            
+
+
+            loss1=0
+            mean_input_len=0
+
+
+            optimizer.zero_grad()
+
             loss=0
             mean_input_len=0
-            optimizer.zero_grad()
             for i in tqdm(range(batch["size"])):
                 input_tokens, labels_tokens = get_input_ids_and_labels_train(batch, i, model_processor, config, epoch, squad_noise_data_loader)
                 if input_tokens.shape[1] > config['max_train_input_len']:
@@ -764,7 +895,7 @@ def run_train_loop(config, start_datetime_str):
                 if config['mamba_arch'] == 'deci' and input_tokens.shape[1]//config['deci_num_chunks'] < config['decimation_min_seq_len'] :
                     print(f'input length {input_tokens.shape[1]} cannot be chunked into {config["deci_num_chunks"]} chunks, dropping sample')
                     continue
-                
+
                 for i_chunk in range(config['deci_num_chunks']):
                     input_tokens_cur_seq, labels_cur_seq, num_labels_in_cur_seq = chunk_train_sequence(i_chunk, input_tokens, labels_tokens,  config)
                     with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
@@ -777,28 +908,32 @@ def run_train_loop(config, start_datetime_str):
                     loss += cur_loss.detach().clone()
                     mean_input_len += input_tokens.shape[1] / batch['size'] / config['deci_num_chunks']# better as long as grad accum steps = batch size
 
+
+
             if step % config["grad_flow_steps"] == 0 and config['activate_logging']:
                 log_grad_flow, grad_flow_data = get_grad_flow_log_format(model, step, grad_flow_data)
 
             if config['clip_grad']:
                 torch.nn.utils.clip_grad_norm_(model.parameters(), config['clip_grad_max_norm'])
             optimizer.step()
+
             lr_sched.step(epoch + idx/len(data_loader_train))
             cur_lr = optimizer.param_groups[0]["lr"]
-            
-            # metrics
-            grad_norm = calc_grad_norm(model)       
-            print(f'Epoch: {epoch} | Step In Epoch: {idx + 1} | Loss: {loss:.3e}, | Grad Norm: {grad_norm:.3e} | Mean Input Length: {mean_input_len:.3e}')
-            log_cur_step = {"loss": loss, "grad_norm": grad_norm, "lr": cur_lr, "mean_input_len": mean_input_len} 
-                
+ 
+
+            print(f'Epoch: {epoch} | Step In Epoch: {idx + 1} | Loss: {loss:.3e}, | Mean Input Length: {mean_input_len:.3e}')
+            log_cur_step = {"loss": loss, "lr": cur_lr, "mean_input_len": mean_input_len} 
+            print("_________________________________________________________________")
+            print("\n")
+
             # log validation samples, train samples and train data 
             if step % config['eval_steps'] == 0 and step > 0:     
                 model.eval()
                 cur_df_val, val_log_cur_step = evaluate_validation_set(model, model_processor, data_loader_val, config, epoch, step, start_datetime_str, num_samples_to_log=config['eval_samples_to_log'])
-                
+
                 if step % config['log_eval_predictions_steps'] == 0:
                     df_val = df_val._append(cur_df_val,ignore_index=True)
-                
+
                 cur_score = val_log_cur_step["score"]
                 print(f'\nValidation Set - Epoch: {epoch} | Step In Epoch: {idx + 1} | Score: {cur_score:.3f}\n')
 
