@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
-
+import numpy
 from einops import rearrange, repeat
 
 from mamba_ssm.ops.selective_scan_interface import selective_scan_fn, mamba_inner_fn
@@ -25,6 +25,42 @@ try:
 except ImportError:
     RMSNorm, layer_norm_fn, rms_norm_fn = None, None, None
 
+
+record = {'delta_t':[], 'A':[], 'B':[], 'C':[]}
+
+def function_(input_tensor, scalars):
+       N = input_tensor.shape[0]
+     
+     # Your 4096 scalars in a tensor
+        # Replace this with the actual scalars
+       D = 8
+     # Calculate the number of rows each scalar will scale
+       rows_per_scalar = N // D
+       remainder = N % D
+     
+     # Create an index tensor to map each row to a corresponding scalar
+       indices = torch.arange(N)
+     
+     # Calculate scalar indices: rows for the first `remainder` scalars have an extra row
+       scalar_indices = torch.zeros(N, dtype=torch.long)
+    
+     # Handle the first `remainder` scalars with an additional row
+       scalar_indices[:remainder * (rows_per_scalar + 1)] = torch.arange(remainder).repeat_interleave(rows_per_scalar + 1)
+    
+     # Handle the remaining scalars with the normal number of rows
+       scalar_indices[remainder * (rows_per_scalar + 1):] = torch.arange(remainder, D).repeat_interleave(rows_per_scalar)
+     
+     # Now, gather the correct scalars for each row
+       scaling_factors = scalars[scalar_indices]
+   
+     # Reshape scaling factors to match the input tensor shape for broadcasting
+#       scaling_factors = scaling_factors.unsqueeze(1)  # Shape: (N, 1)
+     
+     # Apply scaling to the input tensor
+#       print(input_tensor.shape)
+#       print(scaling_factors.shape)
+       output_tensor = input_tensor * scaling_factors
+       return output_tensor
 
 class Mamba(nn.Module):
     def __init__(
@@ -71,7 +107,10 @@ class Mamba(nn.Module):
 
         self.activation = "silu"
         self.act = nn.SiLU()
-        self.mamba_scale = nn.Parameter(torch.tensor([1.0]).bfloat16().cuda(), requires_grad = False)
+        self.armin_ratio = nn.Parameter(torch.tensor(numpy.ones(1)).bfloat16().cuda(), requires_grad = True)
+        #self.armin_ratio = nn.Sequential(torch.nn.Linear(1536, 8).to(dtype=torch.bfloat16).to(device='cuda'), torch.nn.Linear(8,1536 ).to(dtype=torch.bfloat16).to(device='cuda'))
+        #self.armin_ratio = self.armin_ratio.to(dtype=torch.bfloat16).to(device='cuda')
+
         self.x_proj = nn.Linear(
             self.d_inner, self.dt_rank + self.d_state * 2, bias=False, **factory_kwargs
         )
@@ -185,6 +224,8 @@ class Mamba(nn.Module):
             assert self.activation in ["silu", "swish"]
             if False:
                 dt = self.dt_proj.weight @ dt.t()
+                self.armin_ratio.data = self.armin_ratio.data.clamp(min=0.01)
+                dt = (dt.t() * self.armin_ratio).t()
                 dt = rearrange(dt, "d (b l) -> b d l", l=seqlen)
                 y = selective_scan_fn(
                     x,
@@ -201,26 +242,33 @@ class Mamba(nn.Module):
             else:
                 import random
 
-                dt = F.softplus(self.dt_proj(dt))
-                N = dt.shape[0]
-                n = int(N/8)
-
-                #scaling_factors = torch.repeat_interleave(torch.tensor(self.mamba_scale), n)
+                self.armin_ratio.data = self.armin_ratio.data.clamp(min=0.01)
+                dt = (F.softplus(self.dt_proj(dt)))
+                dt = dt * self.armin_ratio
+                #dt = (dt.t() * self.armin_ratio).t()
+                #dt = function_(dt, self.armin_ratio)
+                #dt = self.armin_ratio(dt)
+                #dt = dt.clamp(0.01)
+                #N = dt.shape[0]
+                #d = dt.shape[1]
+                #print(dt.shape)
+                #n = int(d/8)
+                #scaling_factors = torch.repeat_interleave(self.armin_ratio, n)
 
 # If d is not an exact multiple of len(alphas) * n, repeat the last alpha for the remaining columns
-                #if len(scaling_factors) < N:
-                #    scaling_factors = torch.cat([scaling_factors, scaling_factors.new_full((d - len(scaling_factors),), self.mamba_scale[-1])])
+                #if len(scaling_factors) < d:
+                #    scaling_factors = torch.cat([scaling_factors, scaling_factors.new_full((d - len(scaling_factors),), self.armin_ratio[-1])])
 
 # Reshape the scaling_factors to allow broadcasting and multiply
-                #dt *= scaling_factors.view(1, -1)
-#
-                scaling_factors = torch.repeat_interleave(self.mamba_scale, n)
-                
-                if len(scaling_factors) < N:
-                          scaling_factors = torch.cat([scaling_factors, scaling_factors.new_full((N - len(scaling_factors),), self.mamba_scale[-1])])
-#                
-                dt *= scaling_factors.view(-1, 1)
+                #dt =dt *  scaling_factors.view(1, -1)
                 dt = dt.to(dtype=B.dtype)
+                #scaling_factors = torch.repeat_interleave(self.armin_ratio, n)
+                
+                #if len(scaling_factors) < N:
+                #          scaling_factors = torch.cat([scaling_factors, scaling_factors.new_full((N - len(scaling_factors),), self.armin_ratio[-1])])
+#                
+                #dt *= scaling_factors.view(-1, 1)
+ 
 
                 #print("gottttttttttt hereeeeeeeeeeeeeeeee")
                 #n0, d0 = dt.shape
@@ -228,10 +276,16 @@ class Mamba(nn.Module):
                 #    dt[:int(n0*4/5),:] = dt[:int(n0*4/5),:] * 0.25 
                 #print(dt.max())
                 dt = rearrange(dt, "(b l) d -> b d l", l=seqlen)
-                #print(C.shape)
-                #print(A.shape)
-                #print(torch.sum(dt,dim=-1).norm())
-                #print(B.shape)
+                #print("C shape: " + str(C.shape))
+                #print("A shape: " + str(A.shape))
+                #print("dt shape: " + str(dt.shape))
+                #print("B shape: " + str(B.shape))
+                #global record
+                #record['delta_t'].append(dt.detach().cpu())
+                #record['A'].append(A.detach().cpu())
+                #record['B'].append(B.detach().cpu())
+                #record['C'].append(C.detach().cpu())
+                #torch.save(record, 'record.pt')
                 y = selective_scan_fn(
                     x,
                     dt,
