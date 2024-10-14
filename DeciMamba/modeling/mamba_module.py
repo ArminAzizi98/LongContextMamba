@@ -107,9 +107,9 @@ class Mamba(nn.Module):
 
         self.activation = "silu"
         self.act = nn.SiLU()
-        self.armin_ratio = nn.Parameter(torch.tensor(numpy.ones(1)).bfloat16().cuda(), requires_grad = True)
-        #self.armin_ratio = nn.Sequential(torch.nn.Linear(1536, 8).to(dtype=torch.bfloat16).to(device='cuda'), torch.nn.Linear(8,1536 ).to(dtype=torch.bfloat16).to(device='cuda'))
-        #self.armin_ratio = self.armin_ratio.to(dtype=torch.bfloat16).to(device='cuda')
+        self.mamba_scale = nn.Parameter(torch.tensor(numpy.ones(1)).bfloat16().cuda(), requires_grad = True)
+        #self.mamba_scale = nn.Sequential(torch.nn.Linear(1536, 8).to(dtype=torch.bfloat16).to(device='cuda'), torch.nn.Linear(8,1536 ).to(dtype=torch.bfloat16).to(device='cuda'))
+        #self.mamba_scale = self.mamba_scale.to(dtype=torch.bfloat16).to(device='cuda')
 
         self.x_proj = nn.Linear(
             self.d_inner, self.dt_rank + self.d_state * 2, bias=False, **factory_kwargs
@@ -224,8 +224,8 @@ class Mamba(nn.Module):
             assert self.activation in ["silu", "swish"]
             if False:
                 dt = self.dt_proj.weight @ dt.t()
-                self.armin_ratio.data = self.armin_ratio.data.clamp(min=0.01)
-                dt = (dt.t() * self.armin_ratio).t()
+                self.mamba_scale.data = self.mamba_scale.data.clamp(min=0.01)
+                dt = (dt.t() * self.mamba_scale).t()
                 dt = rearrange(dt, "d (b l) -> b d l", l=seqlen)
                 y = selective_scan_fn(
                     x,
@@ -242,30 +242,30 @@ class Mamba(nn.Module):
             else:
                 import random
 
-                self.armin_ratio.data = self.armin_ratio.data.clamp(min=0.01)
+                self.mamba_scale.data = self.mamba_scale.data.clamp(min=0.01)
                 dt = (F.softplus(self.dt_proj(dt)))
-                dt = dt * self.armin_ratio
-                #dt = (dt.t() * self.armin_ratio).t()
-                #dt = function_(dt, self.armin_ratio)
-                #dt = self.armin_ratio(dt)
+                dt = dt * self.mamba_scale
+                #dt = (dt.t() * self.mamba_scale).t()
+                #dt = function_(dt, self.mamba_scale)
+                #dt = self.mamba_scale(dt)
                 #dt = dt.clamp(0.01)
                 #N = dt.shape[0]
                 #d = dt.shape[1]
                 #print(dt.shape)
                 #n = int(d/8)
-                #scaling_factors = torch.repeat_interleave(self.armin_ratio, n)
+                #scaling_factors = torch.repeat_interleave(self.mamba_scale, n)
 
 # If d is not an exact multiple of len(alphas) * n, repeat the last alpha for the remaining columns
                 #if len(scaling_factors) < d:
-                #    scaling_factors = torch.cat([scaling_factors, scaling_factors.new_full((d - len(scaling_factors),), self.armin_ratio[-1])])
+                #    scaling_factors = torch.cat([scaling_factors, scaling_factors.new_full((d - len(scaling_factors),), self.mamba_scale[-1])])
 
 # Reshape the scaling_factors to allow broadcasting and multiply
                 #dt =dt *  scaling_factors.view(1, -1)
                 dt = dt.to(dtype=B.dtype)
-                #scaling_factors = torch.repeat_interleave(self.armin_ratio, n)
+                #scaling_factors = torch.repeat_interleave(self.mamba_scale, n)
                 
                 #if len(scaling_factors) < N:
-                #          scaling_factors = torch.cat([scaling_factors, scaling_factors.new_full((N - len(scaling_factors),), self.armin_ratio[-1])])
+                #          scaling_factors = torch.cat([scaling_factors, scaling_factors.new_full((N - len(scaling_factors),), self.mamba_scale[-1])])
 #                
                 #dt *= scaling_factors.view(-1, 1)
  
