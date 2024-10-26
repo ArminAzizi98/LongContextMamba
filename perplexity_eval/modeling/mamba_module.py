@@ -25,7 +25,7 @@ try:
 except ImportError:
     RMSNorm, layer_norm_fn, rms_norm_fn = None, None, None
 
-
+deltas = []
 class Mamba(nn.Module):
     def __init__(
         self,
@@ -71,7 +71,7 @@ class Mamba(nn.Module):
 
         self.activation = "silu"
         self.act = nn.SiLU()
-        self.mamba_scale = nn.Parameter(torch.tensor([0.5]).bfloat16().cuda(), requires_grad = False)
+        self.mamba_scale = nn.Parameter(torch.tensor([1.0]).bfloat16().cuda(), requires_grad = False)
         self.x_proj = nn.Linear(
             self.d_inner, self.dt_rank + self.d_state * 2, bias=False, **factory_kwargs
         )
@@ -200,27 +200,32 @@ class Mamba(nn.Module):
             else:
                 import random
 
-                dt = F.softplus(self.dt_proj(dt))
-                N = dt.shape[0]
-                n = int(N/8)
-                scaling_factors = torch.repeat_interleave(self.mamba_scale, n)
+                dt = F.softplus(self.dt_proj(dt)) * self.mamba_scale
+                #global deltas
+                #vec = [dt.detach().cpu().float().sum(dim=0).mean(), dt[2000:].detach().cpu().float().sum(dim=0).mean(), dt[4000:].detach().cpu().float().sum(dim=0).mean(),dt[8000:].detach().cpu().float().sum(dim=0).mean(),dt[10000:].detach().cpu().float().sum(dim=0).mean(),dt[12000:].detach().cpu().float().sum(dim=0).mean(),dt[16000:].detach().cpu().float().sum(dim=0).mean(),dt[18000:].detach().cpu().float().sum(dim=0).mean(),dt[20000:].detach().cpu().float().sum(dim=0).mean(),dt[24000:].detach().cpu().float().sum(dim=0).mean()]
+                #deltas.append(vec)
+                #torch.save(deltas, 'Edelta_extend.pt')
+                #N = dt.shape[0]
+                #n = int(N/8)
+                #scaling_factors = torch.repeat_interleave(self.mamba_scale, n)
 
-                if len(scaling_factors) < N:
-                          scaling_factors = torch.cat([scaling_factors, scaling_factors.new_full((N - len(scaling_factors),), self.mamba_scale[-1])])
+                #if len(scaling_factors) < N:
+                #          scaling_factors = torch.cat([scaling_factors, scaling_factors.new_full((N - len(scaling_factors),), self.mamba_scale[-1])])
 
-                dt *= scaling_factors.view(-1, 1)
+                #dt *= scaling_factors.view(-1, 1)
                 dt = dt.to(dtype=B.dtype)
 
                 #print("gottttttttttt hereeeeeeeeeeeeeeeee")
                 #n0, d0 = dt.shape
                 #if n0 > 2048:
                 #    dt[:int(n0*4/5),:] = dt[:int(n0*4/5),:] * 0.25 
-                #print(dt.max())
+                #print(dt.shape)
                 dt = rearrange(dt, "(b l) d -> b d l", l=seqlen)
                 #print(C.shape)
                 #print(A.shape)
-                #print(torch.sum(dt,dim=-1).norm())
-                #print(B.shape)
+                #print(dt.shape)
+               # print(B.shape)
+               
                 y = selective_scan_fn(
                     x,
                     dt,
