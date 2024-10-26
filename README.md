@@ -3,5 +3,5 @@ Code for extending pretrained Mamba models to longer contexts using training-fre
 # Environment Setup
 <pre> <code>conda env create -f env.yml
  conda activate mambaextend</code> </pre 
- # Environment Setup
+**Environment Setup**
 <pre> <code>pip install -r requirements.txt</code> </pre
