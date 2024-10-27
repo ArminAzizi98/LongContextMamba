@@ -1,0 +1,78 @@
+{
+  "builder_name": "parquet",
+  "citation": "",
+  "config_name": "default",
+  "dataset_name": "tokenized_proof_pile_test_neox",
+  "dataset_size": 1618709793,
+  "description": "",
+  "download_checksums": {
+    "hf://datasets/PY007/tokenized_proof_pile_test_neox@3033f74659606b8bad57eb6c124b4e4d498c7b47/data/test-00000-of-00004.parquet": {
+      "num_bytes": 142520009,
+      "checksum": null
+    },
+    "hf://datasets/PY007/tokenized_proof_pile_test_neox@3033f74659606b8bad57eb6c124b4e4d498c7b47/data/test-00001-of-00004.parquet": {
+      "num_bytes": 145211672,
+      "checksum": null
+    },
+    "hf://datasets/PY007/tokenized_proof_pile_test_neox@3033f74659606b8bad57eb6c124b4e4d498c7b47/data/test-00002-of-00004.parquet": {
+      "num_bytes": 143684851,
+      "checksum": null
+    },
+    "hf://datasets/PY007/tokenized_proof_pile_test_neox@3033f74659606b8bad57eb6c124b4e4d498c7b47/data/test-00003-of-00004.parquet": {
+      "num_bytes": 149295192,
+      "checksum": null
+    }
+  },
+  "download_size": 580711724,
+  "features": {
+    "text": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "meta": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "input_ids": {
+      "feature": {
+        "dtype": "int32",
+        "_type": "Value"
+      },
+      "_type": "Sequence"
+    },
+    "attention_mask": {
+      "feature": {
+        "dtype": "int8",
+        "_type": "Value"
+      },
+      "_type": "Sequence"
+    },
+    "tokenized_len": {
+      "dtype": "int64",
+      "_type": "Value"
+    }
+  },
+  "homepage": "",
+  "license": "",
+  "size_in_bytes": 2199421517,
+  "splits": {
+    "test": {
+      "name": "test",
+      "num_bytes": 1618709793,
+      "num_examples": 46251,
+      "shard_lengths": [
+        15563,
+        14563,
+        14563,
+        1562
+      ],
+      "dataset_name": "tokenized_proof_pile_test_neox"
+    }
+  },
+  "version": {
+    "version_str": "0.0.0",
+    "major": 0,
+    "minor": 0,
+    "patch": 0
+  }
+}
