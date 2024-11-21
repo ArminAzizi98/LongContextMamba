@@ -855,7 +855,6 @@ def run_train_loop(config, start_datetime_str):
     #    1.2679, 2.8062, 0.9354, 0.2809, 0.9637, 0.1081, 0.0773, 2.0758, 0.4019,
     #    1.1145, 2.0735, 0.5589, 0.7694, 0.8399, 0.8908])).cuda()
     #t = torch.tensor(numpy.random.rand(24, 1536)).cuda()
-    #t = torch.load('armin_saved/t.pt').cuda()
     #model = set_model(model, t)
     iter = 0
     optimizer = torch.optim.AdamW(model.parameters(), lr=config['lr'], weight_decay=config['weight_decay'])
