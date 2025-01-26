@@ -14,6 +14,7 @@ from modeling.mamba_module import Mamba
 from transformers import MambaConfig, MambaForCausalLM, AutoTokenizer
 import numpy
 import math
+from get_pg19 import *
 
 def set_model(loaded, vec):
     counter = 0
@@ -118,10 +119,15 @@ def main(args):
     models = [x[0] for x in args.model]
     tokenizer = AutoTokenizer.from_pretrained('EleutherAI/gpt-neox-20b')
     tokenizer.pad_token = tokenizer.eos_token
-#    tokenizer = AutoTokenizer.from_pretrained("state-spaces/mamba-1.4b-hf")
 
+    if args.tokenized == "PG19": # PG19
+        model = MambaLMHeadModel.from_pretrained(models[0]).cuda()
+        data_loader_val = get_pg19(val_only=True)
+        config = load_config()
+        _,_ = evaluate_validation_set_ppl_test(model, data_loader_val, config, args)
+        return
 
-    if args.tokenized:
+    elif args.tokenized=="PY007/tokenized_proof_pile_test_neox": #Pile
             #input_texts = datasets.load_from_disk(args.tokenized)
             input_texts_calib = datasets.load_from_disk("./calibration_samples")
             input_texts = datasets.load_dataset(
