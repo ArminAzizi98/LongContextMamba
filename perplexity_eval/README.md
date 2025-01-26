@@ -10,4 +10,4 @@
     --delta_ratio 1.0 \
     -m state-spaces/mamba-130m </code> </pre>
 
-**Note:** You can set the desired evaluation context length and the number of evaluation samples directly  by modifying the --eval-length and --samples parameters respectively.
+**Note:** You can set the desired evaluation context length and the number of evaluation samples directly  by modifying the --eval-length and --samples parameters, respectively.
