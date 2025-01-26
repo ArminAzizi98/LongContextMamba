@@ -116,6 +116,12 @@ def compute_perplexity(
 
 
 def main(args):
+
+    args.min_tokens = args.eval_length
+    args.max_tokens = args.eval_length
+    args.dataset_min_tokens = args.eval_length
+    args.token_steps = args.eval_length
+
     models = [x[0] for x in args.model]
     tokenizer = AutoTokenizer.from_pretrained('EleutherAI/gpt-neox-20b')
     tokenizer.pad_token = tokenizer.eos_token
