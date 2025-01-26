@@ -12,7 +12,7 @@
 
 **Note:** You can set the desired evaluation context length and the number of evaluation samples directly  by modifying the --eval-length and --samples parameters, respectively.
 
-![Project Screenshot](./assets/FIrst_fig_bar.png)
+![Long-context understanding on Pile. Compared to the pre-trained alternatives, MambaExtend provides up to ∼8145× improvement in perplexity score, via a training-free calibration.](./assets/FIrst_fig_bar.png)
 # Run MambaExtend on PG19
 <pre> <code>python -u eval.py \
     --tokenized PG19 \
