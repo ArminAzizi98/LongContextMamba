@@ -12,7 +12,7 @@
 
 **Note:** You can set the desired evaluation context length and the number of evaluation samples directly  by modifying the --eval-length and --samples parameters, respectively.
 
-![Project Screenshot](FIrst_fig_bar.png)
+![Project Screenshot](./assets/FIrst_fig_bar.png)
 # Run MambaExtend on PG19
 <pre> <code>python -u eval.py \
     --tokenized PG19 \
