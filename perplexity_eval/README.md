@@ -25,4 +25,4 @@
     --delta_ratio 1.0 \
     -m state-spaces/mamba-130m </code> </pre>
 
-![Project Screenshot](./assets/PG19_PPL.png)
+![Perplexity comparison on PG-19.](./assets/PG19_PPL.png)
