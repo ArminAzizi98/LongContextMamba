@@ -1,4 +1,4 @@
-# LongContextMamba
+# MambaExtend
 Code for extending pretrained Mamba models to longer contexts using a training-free approach.
 
 # Environment Setup
