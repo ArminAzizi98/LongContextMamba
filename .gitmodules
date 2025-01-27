@@ -1,3 +1,6 @@
 [submodule "LongBench"]
 	path = LongBench
 	url = https://github.com/THUDM/LongBench.git
+[submodule "THUDM/LongBench"]
+	path = THUDM/LongBench
+	url = https://github.com/ArminAzizi98/LongBench.git
