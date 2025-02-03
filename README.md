@@ -1,5 +1,13 @@
 # MambaExtend
-Code for extending pretrained Mamba models to longer contexts using a training-free approach.
+This is the official code repo for the **ICLR 2025** paper **MambaExtend: A Training-Free Approach to Improve Long Context Extension of Mamba**
+
+Paper link: https://openreview.net/pdf?id=LgzRo1RpLS
+
+# Contrbutiors
+1. Seyedarmin Azizi
+2. Souvik Kundu
+3. Mohammad Erfan Sadeghi
+4. Massoud Pedram
 
 # Environment Setup
 <pre><code>conda env create -f env.yml
