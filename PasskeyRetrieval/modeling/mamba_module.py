@@ -108,9 +108,9 @@ class Mamba(nn.Module):
 
         self.activation = "silu"
         self.act = nn.SiLU()
-        self.armin_ratio = nn.Parameter(torch.tensor(numpy.random.rand(1536)).bfloat16().cuda(), requires_grad = True)
-        #self.armin_ratio = nn.Sequential(torch.nn.Linear(1536, 8).to(dtype=torch.bfloat16).to(device='cuda'), torch.nn.Linear(8,1536 ).to(dtype=torch.bfloat16).to(device='cuda'))
-        #self.armin_ratio = self.armin_ratio.to(dtype=torch.bfloat16).to(device='cuda')
+        self.mamba_scale = nn.Parameter(torch.tensor(numpy.random.rand(1536)).bfloat16().cuda(), requires_grad = True)
+        #self.mamba_scale = nn.Sequential(torch.nn.Linear(1536, 8).to(dtype=torch.bfloat16).to(device='cuda'), torch.nn.Linear(8,1536 ).to(dtype=torch.bfloat16).to(device='cuda'))
+        #self.mamba_scale = self.mamba_scale.to(dtype=torch.bfloat16).to(device='cuda')
 
         self.x_proj = nn.Linear(
             self.d_inner, self.dt_rank + self.d_state * 2, bias=False, **factory_kwargs
@@ -225,8 +225,8 @@ class Mamba(nn.Module):
             assert self.activation in ["silu", "swish"]
             if False:
                 dt = self.dt_proj.weight @ dt.t()
-                self.armin_ratio.data = self.armin_ratio.data.clamp(min=0.01)
-                dt = (dt.t() * self.armin_ratio).t()
+                self.mamba_scale.data = self.mamba_scale.data.clamp(min=0.01)
+                dt = (dt.t() * self.mamba_scale).t()
                 dt = rearrange(dt, "d (b l) -> b d l", l=seqlen)
                 y = selective_scan_fn(
                     x,
@@ -243,9 +243,9 @@ class Mamba(nn.Module):
             else:
                 import random
 
-                self.armin_ratio.data = self.armin_ratio.data.clamp(min=0.01)
+                self.mamba_scale.data = self.mamba_scale.data.clamp(min=0.01)
                 dt = (F.softplus(self.dt_proj(dt)))
-                dt = dt * self.armin_ratio
+                dt = dt * self.mamba_scale
                 dt = dt.to(dtype=B.dtype)
                 dt = rearrange(dt, "(b l) d -> b d l", l=seqlen)
                 y = selective_scan_fn(
