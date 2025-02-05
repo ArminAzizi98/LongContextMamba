@@ -25,9 +25,44 @@ try:
 except ImportError:
     RMSNorm, layer_norm_fn, rms_norm_fn = None, None, None
 
-deltas = []
-lcounter = 0
+
+record = {'delta_t':[], 'A':[], 'B':[], 'C':[]}
 global_channels = torch.zeros(24, 1536).cuda()
+lcounter = 0
+def function_(input_tensor, scalars):
+       N = input_tensor.shape[0]
+     
+     # Your 4096 scalars in a tensor
+        # Replace this with the actual scalars
+       D = 8
+     # Calculate the number of rows each scalar will scale
+       rows_per_scalar = N // D
+       remainder = N % D
+     
+     # Create an index tensor to map each row to a corresponding scalar
+       indices = torch.arange(N)
+     
+     # Calculate scalar indices: rows for the first `remainder` scalars have an extra row
+       scalar_indices = torch.zeros(N, dtype=torch.long)
+    
+     # Handle the first `remainder` scalars with an additional row
+       scalar_indices[:remainder * (rows_per_scalar + 1)] = torch.arange(remainder).repeat_interleave(rows_per_scalar + 1)
+    
+     # Handle the remaining scalars with the normal number of rows
+       scalar_indices[remainder * (rows_per_scalar + 1):] = torch.arange(remainder, D).repeat_interleave(rows_per_scalar)
+     
+     # Now, gather the correct scalars for each row
+       scaling_factors = scalars[scalar_indices]
+   
+     # Reshape scaling factors to match the input tensor shape for broadcasting
+#       scaling_factors = scaling_factors.unsqueeze(1)  # Shape: (N, 1)
+     
+     # Apply scaling to the input tensor
+#       print(input_tensor.shape)
+#       print(scaling_factors.shape)
+       output_tensor = input_tensor * scaling_factors
+       return output_tensor
+
 class Mamba(nn.Module):
     def __init__(
         self,
@@ -73,7 +108,10 @@ class Mamba(nn.Module):
 
         self.activation = "silu"
         self.act = nn.SiLU()
-        self.mamba_scale = nn.Parameter(torch.tensor(numpy.ones(1536)).bfloat16().cuda(), requires_grad = True)
+        self.armin_ratio = nn.Parameter(torch.tensor(numpy.random.rand(1536)).bfloat16().cuda(), requires_grad = True)
+        #self.armin_ratio = nn.Sequential(torch.nn.Linear(1536, 8).to(dtype=torch.bfloat16).to(device='cuda'), torch.nn.Linear(8,1536 ).to(dtype=torch.bfloat16).to(device='cuda'))
+        #self.armin_ratio = self.armin_ratio.to(dtype=torch.bfloat16).to(device='cuda')
+
         self.x_proj = nn.Linear(
             self.d_inner, self.dt_rank + self.d_state * 2, bias=False, **factory_kwargs
         )
@@ -143,8 +181,8 @@ class Mamba(nn.Module):
         A = -torch.exp(self.A_log.float())  # (d_inner, d_state)
         # In the backward pass we write dx and dz next to each other to avoid torch.cat
         #if self.use_fast_path and inference_params is None and not delta_ratio:  # Doesn't support outputting the states
-        if False:
-            out = mamba_inner_fn(
+        if False: 
+           out = mamba_inner_fn(
                 xz,
                 self.conv1d.weight,
                 self.conv1d.bias,
@@ -187,6 +225,8 @@ class Mamba(nn.Module):
             assert self.activation in ["silu", "swish"]
             if False:
                 dt = self.dt_proj.weight @ dt.t()
+                self.armin_ratio.data = self.armin_ratio.data.clamp(min=0.01)
+                dt = (dt.t() * self.armin_ratio).t()
                 dt = rearrange(dt, "d (b l) -> b d l", l=seqlen)
                 y = selective_scan_fn(
                     x,
@@ -201,11 +241,13 @@ class Mamba(nn.Module):
                     return_last_state=ssm_state is not None,
                 )
             else:
-                dt = F.softplus(self.dt_proj(dt)) * self.mamba_scale
+                import random
+
+                self.armin_ratio.data = self.armin_ratio.data.clamp(min=0.01)
+                dt = (F.softplus(self.dt_proj(dt)))
+                dt = dt * self.armin_ratio
                 dt = dt.to(dtype=B.dtype)
-
                 dt = rearrange(dt, "(b l) d -> b d l", l=seqlen)
-
                 y = selective_scan_fn(
                     x,
                     dt,
@@ -366,7 +408,7 @@ class Block(nn.Module):
                 residual_in_fp32=self.residual_in_fp32,
                 eps=self.norm.eps,
             )
-        hidden_states = self.mixer(hidden_states)
+        hidden_states = self.mixer(hidden_states, delta_ratio=delta_ratio, inference_params=inference_params)
         return hidden_states, residual
 
     def allocate_inference_cache(self, batch_size, max_seqlen, dtype=None, **kwargs):
