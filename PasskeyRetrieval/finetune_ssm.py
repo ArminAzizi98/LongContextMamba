@@ -621,6 +621,8 @@ def run_train_loop(config, start_datetime_str):
     
     set_seed(config['seed'])
     config = validate_config(config)
+    if config["mambaextend"]:
+        config['lr'] = 0.1
     model_processor, model = load_model(config)
     data_loader_train, data_loader_val = get_data_loaders(config, model_processor=model_processor)
     optimizer = torch.optim.AdamW(model.parameters(), lr=config['lr'], weight_decay=config['weight_decay'])
@@ -647,9 +649,10 @@ def run_train_loop(config, start_datetime_str):
     best_score = init_best_score(config)
     squad_noise_data_loader = None
     counter = 0
-    for pname, p in model.named_parameters():
-       if not ('mamba_scale' in pname):
-           p.requires_grad = False
+    if config["mambaextend"]:
+        for pname, p in model.named_parameters():
+            if not ('mamba_scale' in pname):
+                p.requires_grad = False
 
     iter = 0
     optimizer = torch.optim.AdamW(model.parameters(), lr=config['lr'], weight_decay=config['weight_decay'])
