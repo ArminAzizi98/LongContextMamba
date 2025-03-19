@@ -108,7 +108,7 @@ class Mamba(nn.Module):
 
         self.activation = "silu"
         self.act = nn.SiLU()
-        self.mamba_scale = nn.Parameter(torch.tensor(numpy.random.rand(self.d_model)).bfloat16().cuda(), requires_grad = True)
+        self.mamba_scale = nn.Parameter(torch.tensor(numpy.random.rand(self.d_inner)).bfloat16().cuda(), requires_grad = True)
 
         self.x_proj = nn.Linear(
             self.d_inner, self.dt_rank + self.d_state * 2, bias=False, **factory_kwargs
