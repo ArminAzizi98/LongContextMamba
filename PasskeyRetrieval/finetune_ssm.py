@@ -47,7 +47,7 @@ def set_min(array, val1 = 0.01, val2=1.0):
     for i,x in enumerate(array):
         if x<val1:
             array[i] = val1
-      return array
+    return array
 
 def set_model(loaded, vec):
     counter = 0
