@@ -15,3 +15,7 @@ conda activate mambaextend</code></pre>
 
 Alternatively, you can only install the dependencies:
 <pre><code>pip install -r requirements.txt</code></pre>
+
+
+# Tasks
+MambaExtend is evaluated across three sets of tasks: perplexity evaluation (ProofPile and PG-19), passkey retrieval, and LongBench.
