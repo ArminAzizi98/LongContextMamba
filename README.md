@@ -13,5 +13,5 @@ Paper link: https://openreview.net/pdf?id=LgzRo1RpLS
 <pre><code>conda env create -f env.yml
 conda activate mambaextend</code></pre>
 
-To install the dependencies:
+Alternatively, only install the dependencies:
 <pre><code>pip install -r requirements.txt</code></pre>
