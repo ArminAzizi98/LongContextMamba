@@ -3,4 +3,4 @@
 
 **Note:** This code is based on the DeciMamba implementation for the passkey retrieval task. 
 
-![Perplexity comparison on PG-19.](./assets/Passkey.png)
+![Perplexity comparison on Passkey Retrieval.](./assets/Passkey.png)
