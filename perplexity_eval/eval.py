@@ -26,12 +26,9 @@ def set_model(loaded, vec):
     return loaded
 
 def set_min(array, val1 = 0.01, val2=1.0):
-#    for j in  range(array.shape[0]):
       for i,x in enumerate(array):
         if x<val1:
             array[i] = val1
-#        #elif x>val2:
-#        #    array[j,i] = val2
       return array
 
 def compute_perplexity(
