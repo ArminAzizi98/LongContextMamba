@@ -18,7 +18,7 @@ Alternatively, you can only install the dependencies:
 
 
 # Tasks
-MambaExtend is evaluated across three sets of tasks: perplexity evaluation (ProofPile and PG-19), passkey retrieval, and LongBench.
+MambaExtend is evaluated across three sets of tasks: perplexity evaluation (ProofPile and PG-19), passkey retrieval, and LongBench. Please navigate to the corresponding directory for the codebase. 
 
 
 
