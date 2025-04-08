@@ -10,7 +10,7 @@ Paper link: https://openreview.net/pdf?id=LgzRo1RpLS
 4. Massoud Pedram
 
 # Environment Setup
-<pre><code>conda env create -f env.yml
+<pre><code>conda env create -f env.yaml
 conda activate mambaextend</code></pre>
 
 Alternatively, you can only install the dependencies:
