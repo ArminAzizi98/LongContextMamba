@@ -29,18 +29,6 @@ from submodules.babilong.babilong_utils import TaskDatasetCustom, SentenceSample
 import modeling
 from utils import *
 from custom_datasets.pg19 import *
-from quant import *
-
-
-def quant_weight(model, var = None):
-    if var is None:
-        for pname, p in model.named_parameters():
-            p.data = dynamic_per_channel_absmax_quantization(p.data, 4, False, 0, 0.95)
-    else:
-        for pname, p in model.named_parameters():
-            if not(var in pname):
-                p.data = dynamic_per_channel_absmax_quantization(p.data, 4, False,0, 0.95)
-    return model
 
 def set_min(array, val1 = 0.01, val2=1.0):
 
