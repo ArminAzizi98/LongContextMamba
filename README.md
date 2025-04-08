@@ -28,9 +28,8 @@ If you use this code or refer to it in your work, please cite our paper:
 
 ```bibtex
 @inproceedings{azizi2025mambaextend,
-  title     = {MambaExtend: A Training-Free Approach to Improve Long Context Extension of Mamba},
-  author    = {Seyedarmin Azizi, Souvik Kundu, Mohammad Erfan Sadeghi, Massoud Pedram},
-  booktitle = {International Conference on Learning Representations (ICLR)},
-  year      = {2025},
-  url       = {https://openreview.net/forum?id=LgzRo1RpLS}
+  title={MambaExtend: A Training-Free Approach to Improve Long Context Extension of Mamba},
+  author={Azizi, Seyedarmin and Kundu, Souvik and Sadeghi, Mohammad Erfan and Pedram, Massoud},
+  booktitle={The Thirteenth International Conference on Learning Representations},
+  year={2025}
 }
