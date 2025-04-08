@@ -18,7 +18,7 @@
     "lr_sched_type": "const",
     
     "save_steps" : 100,
-    "eval_steps" : 100,
+    "eval_steps" : 40,
     "grad_flow_steps" : 10,
     "max_step" : 20000,
     "epochs": 10,
