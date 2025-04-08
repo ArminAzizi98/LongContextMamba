@@ -56,7 +56,7 @@
     "find_deci_layer": false,
     
     "lr": 1e-1,
-    "weight_decay": 0.1,
+    "weight_decay": 0.0,
     "grad_accum_steps": 32,
 
     "mambaextend": true
