@@ -33,7 +33,7 @@
     "max_train_input_len": 20000,
     
     "niah_train_set_size": 6144,
-    "niah_context_len_train": 2048,
+    "niah_context_len_train": 4096,
     "niah_needle_depths_eval": [0, 0.25, 0.5, 0.75, 1],
     "niah_context_lens_eval": [1000, 2000, 4000, 8000, 16000, 32000, 64000, 128000],
     
